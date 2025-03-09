@@ -14,3 +14,6 @@
 
 https://github.com/user-attachments/assets/229139bd-1065-4539-bcfa-b0c245259f6d
 
+## 鸣谢
+
+[NotaGen](https://github.com/ElectricAlexis/NotaGen)

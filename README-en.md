@@ -14,3 +14,7 @@ Download the model to `ComfyUI\models\TTS\NotaGen` and rename it as required:
 
 https://github.com/user-attachments/assets/229139bd-1065-4539-bcfa-b0c245259f6d
 
+
+## Acknowledgments
+
+[NotaGen](https://github.com/ElectricAlexis/NotaGen)
