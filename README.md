@@ -2,7 +2,7 @@
 
 # 符号音乐生成. NotaGen 的 ComfyUI 节点.
 
-![image](https://github.com/billwuhao/ComfyUI_KokoroTTS_MW/blob/master/images/2025-03-10_06-24-03.png)
+![image](https://github.com/billwuhao/ComfyUI_NotaGen/blob/master/images/2025-03-10_06-24-03.png)
 
 将模型下载放到 `ComfyUI\models\TTS\NotaGen` 下, 并按要求重命名:
 
