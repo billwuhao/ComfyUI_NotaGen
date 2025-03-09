@@ -1,0 +1,14 @@
+[project]
+name = "notagen-mw"
+description = "Symbolic Music Generation, NotaGen node for ComfyUI."
+version = "1.0.0"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/billwuhao/ComfyUI_NotaGen"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "mw"
+DisplayName = "ComfyUI_NotaGen"
+Icon = "https://github.com/billwuhao/aiart.website/blob/master/hb.png"
