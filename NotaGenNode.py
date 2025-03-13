@@ -47,116 +47,35 @@ class NotaGenRun:
                 "period": (s.periods, {"default": "Romantic", }),
                 "composer": (s.composers, {"default": "Bach, Johann Sebastian", }),
                 "instrumentation": (s.instrumentations, {"default": "Keyboard", }),
-                "num_samples": ("INT", {"default": 1, "min": 1}),
+                "custom_prompt": ("STRING", {"default": "Romantic | Bach, Johann Sebastian | Keyboard", 
+                                             "multiline": True, 
+                                             "tooltip": "Custom prompt must <period>|<composer>|<instrumentation>."}),
+                # "num_samples": ("INT", {"default": 1, "min": 1}),
                 # "temperature": ("FLOAT", {"default": 0.8, "min": 0, "max": 1, "step": 0.1}),
                 # "top_k": ("INT", {"default": 50, "min": 0}),
                 # "top_p": ("FLOAT", {"default": 0.95, "min": 0, "max": 1, "step": 0.01}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-            },
-            "optional": {
-                "abc2xml": ("BOOLEAN", {"default": False}),
-                "python_path": ("STRING", {"default": "", "multiline": False, "tooltip": "The absolute path of python.exe"}),
-                # "save_path": ("STRING", {"default": "", "tooltip": "(optional) Default Save to output/notagen_xxx"}),
-                # "custom_prompt": ("STRING", {"default": "", "multiline": True, "tooltip": "(optional) The format must be `period | composer | instrumentation`."}),
+                "comfy_python_path": ("STRING", {"default": "", "multiline": False, "tooltip": "The absolute path of python.exe in the Comfyui environment"}),
+                # "audio_sheet_music": ("BOOLEAN", {"default": True}),
+                "musescore4_path": ("STRING", {"default": "", "tooltip": r"The absolute path as `D:\APP\MuseScorePortable\App\MuseScore\bin\MuseScore4.exe`"}),
+                # "abc2xml": ("BOOLEAN", {"default": True}),
             },
         }
 
-    RETURN_TYPES = ("STRING",)
+    RETURN_TYPES = ("AUDIO", "IMAGE", "STRING")
+    RETURN_NAMES = ("audio", "score", "message")
     FUNCTION = "inference_patch"
     CATEGORY = "MW-NotaGen"
 
     # Note_list = Note_list + ['z', 'x']
-
-    def rest_unreduce(self, abc_lines):
-
-        tunebody_index = None
-        for i in range(len(abc_lines)):
-            if '[V:' in abc_lines[i]:
-                tunebody_index = i
-                break
-
-        metadata_lines = abc_lines[: tunebody_index]
-        tunebody_lines = abc_lines[tunebody_index:]
-
-        part_symbol_list = []
-        voice_group_list = []
-        for line in metadata_lines:
-            if line.startswith('%%score'):
-                for round_bracket_match in re.findall(r'\((.*?)\)', line):
-                    voice_group_list.append(round_bracket_match.split())
-                existed_voices = [item for sublist in voice_group_list for item in sublist]
-            if line.startswith('V:'):
-                symbol = line.split()[0]
-                part_symbol_list.append(symbol)
-                if symbol[2:] not in existed_voices:
-                    voice_group_list.append([symbol[2:]])
-        z_symbol_list = []  # voices that use z as rest
-        x_symbol_list = []  # voices that use x as rest
-        for voice_group in voice_group_list:
-            z_symbol_list.append('V:' + voice_group[0])
-            for j in range(1, len(voice_group)):
-                x_symbol_list.append('V:' + voice_group[j])
-
-        part_symbol_list.sort(key=lambda x: int(x[2:]))
-
-        unreduced_tunebody_lines = []
-
-        for i, line in enumerate(tunebody_lines):
-            unreduced_line = ''
-
-            line = re.sub(r'^\[r:[^\]]*\]', '', line)
-
-            pattern = r'\[V:(\d+)\](.*?)(?=\[V:|$)'
-            matches = re.findall(pattern, line)
-
-            line_bar_dict = {}
-            for match in matches:
-                key = f'V:{match[0]}'
-                value = match[1]
-                line_bar_dict[key] = value
-
-            # calculate duration and collect barline
-            dur_dict = {}  
-            for symbol, bartext in line_bar_dict.items():
-                right_barline = ''.join(re.split(Barline_regexPattern, bartext)[-2:])
-                bartext = bartext[:-len(right_barline)]
-                try:
-                    bar_dur = calculate_bartext_duration(bartext)
-                except:
-                    bar_dur = None
-                if bar_dur is not None:
-                    if bar_dur not in dur_dict.keys():
-                        dur_dict[bar_dur] = 1
-                    else:
-                        dur_dict[bar_dur] += 1
-
-            try:
-                ref_dur = max(dur_dict, key=dur_dict.get)
-            except:
-                pass    # use last ref_dur
-
-            if i == 0:
-                prefix_left_barline = line.split('[V:')[0]
-            else:
-                prefix_left_barline = ''
-
-            for symbol in part_symbol_list:
-                if symbol in line_bar_dict.keys():
-                    symbol_bartext = line_bar_dict[symbol]
-                else:
-                    if symbol in z_symbol_list:
-                        symbol_bartext = prefix_left_barline + 'z' + str(ref_dur) + right_barline
-                    elif symbol in x_symbol_list:
-                        symbol_bartext = prefix_left_barline + 'x' + str(ref_dur) + right_barline
-                unreduced_line += '[' + symbol + ']' + symbol_bartext
-
-            unreduced_tunebody_lines.append(unreduced_line + '\n')
-
-        unreduced_lines = metadata_lines + unreduced_tunebody_lines
-
-        return unreduced_lines
-
-    def inference_patch(self, model, period, composer, instrumentation, num_samples, abc2xml, python_path, seed):
+    def inference_patch(self, model, period, composer, instrumentation, 
+                        custom_prompt,
+                        # num_samples, 
+                        # abc2xml, 
+                        comfy_python_path, 
+                        # audio_sheet_music,
+                        musescore4_path,
+                        seed):
         if model == "notagenx.pth" or model == "notagen_large.pth":
             cf = nota_lx
         elif model == "notagen_small.pth":
@@ -192,6 +111,9 @@ class NotaGenRun:
         nota_model = nota_model.to(self.device)
         nota_model.eval()
 
+        if custom_prompt.strip():
+            period, composer, instrumentation = [i.strip() for i in custom_prompt.split('|')]
+
         prompt_lines=[
             '%' + period + '\n',
             '%' + composer + '\n',
@@ -199,10 +121,12 @@ class NotaGenRun:
 
         patchilizer = Patchilizer(model)
 
-        file_no = 1
+        # file_no = 1
         bos_patch = [patchilizer.bos_token_id] * (patch_size - 1) + [patchilizer.eos_token_id]
-
-        while file_no <= num_samples:
+        num_gen = 0
+        unreduced_xml_path = None
+        save_xml_original = False
+        while num_gen <= 5: #num_samples:
 
             start_time = time.time()
             # start_time_format = time.strftime("%Y%m%d-%H%M%S")
@@ -300,7 +224,7 @@ class NotaGenRun:
 
                 abc_text = ''.join(byte_list)
                 filename = time.strftime("%Y%m%d-%H%M%S") + \
-                        "_" + format(generation_time_cost, '.2f') + '_' + str(file_no) + ".abc"
+                        "_" + str(int(generation_time_cost)) + ".abc"
                         
                 # unreduce
                 unreduced_output_path = os.path.join(INTERLEAVED_OUTPUT_FOLDER, filename)
@@ -308,30 +232,23 @@ class NotaGenRun:
                 abc_lines = abc_text.split('\n')
                 abc_lines = list(filter(None, abc_lines))
                 abc_lines = [line + '\n' for line in abc_lines]
+                
                 try:
                     abc_lines = self.rest_unreduce(abc_lines)
 
                     with open(unreduced_output_path, 'w') as file:
                         file.writelines(abc_lines)
                         print(f"Saved to {unreduced_output_path}",)
-
-                    if abc2xml:
-                        import subprocess 
-                        xml_filename = f"{INTERLEAVED_OUTPUT_FOLDER}/{filename.rsplit(".", 1)[0]}.xml"
-                        try:
-                            subprocess.run(
-                                [python_path, f"{self.node_dir}/abc2xml.py", '-o', INTERLEAVED_OUTPUT_FOLDER, unreduced_output_path, ],
-                                check=True,
-                                capture_output=True,
-                                text=True
-                            )
-                            print(f"Conversion to {xml_filename}",)
-                        except subprocess.CalledProcessError as e:
-                            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
-                            raise 
+                    unreduced_xml_path = self.abc2xml(unreduced_output_path, INTERLEAVED_OUTPUT_FOLDER, comfy_python_path)
+                    if unreduced_xml_path:
+                        save_xml_original = True
+                    else:
+                        num_gen += 1
+                        save_xml_original = False
                         
                 except:
-                    pass
+                    num_gen += 1
+                    continue
                 else:
                     # original
                     original_output_path = os.path.join(ORIGINAL_OUTPUT_FOLDER, filename)
@@ -339,27 +256,274 @@ class NotaGenRun:
                         w.write(abc_text)
                         print(f"Saved to {original_output_path}",)
                     
-                    if abc2xml:
-                        import subprocess 
-                        xml_filename = f"{ORIGINAL_OUTPUT_FOLDER}/{filename.rsplit(".", 1)[0]}.xml"
-                        try:
-                            subprocess.run(
-                                [python_path, f"{self.node_dir}/abc2xml.py", '-o', ORIGINAL_OUTPUT_FOLDER, original_output_path, ],
-                                check=True,
-                                capture_output=True,
-                                text=True
-                            )
-                            print(f"Conversion to {xml_filename}",)
-                        except subprocess.CalledProcessError as e:
-                            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
-                            raise 
-                    file_no += 1
-
+                    if save_xml_original:
+                        original_xml_path = self.abc2xml(original_output_path, ORIGINAL_OUTPUT_FOLDER, comfy_python_path)
+                        if original_xml_path:
+                            print(f"Conversion to {original_xml_path}",)
+                        break
+                    else:
+                        num_gen += 1
+                        continue
+                    # file_no += 1
             else:
                 print('Generation failed.')
+                num_gen += 1
+                if num_gen > 5:
+                    raise Exception("All generation attempts failed after 6 tries. Try again.")
 
-        return (f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",)
-    
+        if unreduced_xml_path:
+            mp3_path = self.xml2mp3(unreduced_xml_path, musescore4_path)
+            png_paths = self.xml2png(unreduced_xml_path, musescore4_path)
+                
+            # 处理音频
+            audio = None
+            if mp3_path and os.path.exists(mp3_path):
+                import torchaudio
+                waveform, sample_rate = torchaudio.load(mp3_path)
+                audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}
+            else:
+                audio = self.get_empty_audio()
+            
+            # 处理图片
+            images = []
+            if png_paths:
+                from PIL import Image, ImageOps
+                import numpy as np
+                
+                for image_path in png_paths:
+                    i = Image.open(image_path)
+                    i = ImageOps.exif_transpose(i)
+                    
+                    # 调整宽度为1024，保持宽高比
+                    width, height = i.size
+                    new_width = 1024
+                    new_height = int(height * (new_width / width))
+                    i = i.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    
+                    image = i.convert("RGB")
+                    image = np.array(image).astype(np.float32) / 255.0
+                    image = torch.from_numpy(image)[None,]
+                    images.append(image)
+                
+                if len(images) > 1:
+                    image1 = images[0]
+                    for image2 in images[1:]:
+                        image1 = torch.cat((image1, image2), dim=0)
+                else:
+                    image1 = images[0]
+            else:
+                image1 = self.get_empty_image()
+
+            return (
+                audio,
+                image1,
+                f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",
+            )
+
+        return (
+            self.get_empty_audio(),
+            self.get_empty_image(),
+            f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",
+        )
+
+
+    def get_empty_audio(self):
+        """返回空音频"""
+        return {"waveform": torch.zeros(1, 2, 1), "sample_rate": 44100}
+
+    def get_empty_image(self):
+        """返回空图片"""
+        import numpy as np
+        return torch.from_numpy(np.zeros((1, 64, 64, 3), dtype=np.float32))
+
+    def rest_unreduce(self, abc_lines):
+
+        tunebody_index = None
+        for i in range(len(abc_lines)):
+            if '[V:' in abc_lines[i]:
+                tunebody_index = i
+                break
+
+        metadata_lines = abc_lines[: tunebody_index]
+        tunebody_lines = abc_lines[tunebody_index:]
+
+        part_symbol_list = []
+        voice_group_list = []
+        for line in metadata_lines:
+            if line.startswith('%%score'):
+                for round_bracket_match in re.findall(r'\((.*?)\)', line):
+                    voice_group_list.append(round_bracket_match.split())
+                existed_voices = [item for sublist in voice_group_list for item in sublist]
+            if line.startswith('V:'):
+                symbol = line.split()[0]
+                part_symbol_list.append(symbol)
+                if symbol[2:] not in existed_voices:
+                    voice_group_list.append([symbol[2:]])
+        z_symbol_list = []  # voices that use z as rest
+        x_symbol_list = []  # voices that use x as rest
+        for voice_group in voice_group_list:
+            z_symbol_list.append('V:' + voice_group[0])
+            for j in range(1, len(voice_group)):
+                x_symbol_list.append('V:' + voice_group[j])
+
+        part_symbol_list.sort(key=lambda x: int(x[2:]))
+
+        unreduced_tunebody_lines = []
+
+        for i, line in enumerate(tunebody_lines):
+            unreduced_line = ''
+
+            line = re.sub(r'^\[r:[^\]]*\]', '', line)
+
+            pattern = r'\[V:(\d+)\](.*?)(?=\[V:|$)'
+            matches = re.findall(pattern, line)
+
+            line_bar_dict = {}
+            for match in matches:
+                key = f'V:{match[0]}'
+                value = match[1]
+                line_bar_dict[key] = value
+
+            # calculate duration and collect barline
+            dur_dict = {}  
+            for symbol, bartext in line_bar_dict.items():
+                right_barline = ''.join(re.split(Barline_regexPattern, bartext)[-2:])
+                bartext = bartext[:-len(right_barline)]
+                try:
+                    bar_dur = calculate_bartext_duration(bartext)
+                except:
+                    bar_dur = None
+                if bar_dur is not None:
+                    if bar_dur not in dur_dict.keys():
+                        dur_dict[bar_dur] = 1
+                    else:
+                        dur_dict[bar_dur] += 1
+
+            try:
+                ref_dur = max(dur_dict, key=dur_dict.get)
+            except:
+                pass    # use last ref_dur
+
+            if i == 0:
+                prefix_left_barline = line.split('[V:')[0]
+            else:
+                prefix_left_barline = ''
+
+            for symbol in part_symbol_list:
+                if symbol in line_bar_dict.keys():
+                    symbol_bartext = line_bar_dict[symbol]
+                else:
+                    if symbol in z_symbol_list:
+                        symbol_bartext = prefix_left_barline + 'z' + str(ref_dur) + right_barline
+                    elif symbol in x_symbol_list:
+                        symbol_bartext = prefix_left_barline + 'x' + str(ref_dur) + right_barline
+                unreduced_line += '[' + symbol + ']' + symbol_bartext
+
+            unreduced_tunebody_lines.append(unreduced_line + '\n')
+
+        unreduced_lines = metadata_lines + unreduced_tunebody_lines
+
+        return unreduced_lines
+
+    def wait_for_file(self, file_path, timeout=15, check_interval=0.3):
+        """等待文件生成完成"""
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            if os.path.exists(file_path):
+                # 对于MP3文件，检查文件大小是否不再变化
+                if file_path.endswith('.mp3'):
+                    initial_size = os.path.getsize(file_path)
+                    time.sleep(check_interval)
+                    if os.path.getsize(file_path) == initial_size:
+                        return True
+                else:
+                    return True
+            time.sleep(check_interval)
+        return False
+
+    def wait_for_png_sequence(self, base_path, timeout=15, check_interval=0.3):
+        """等待PNG序列生成完成"""
+        import glob
+        
+        start_time = time.time()
+        last_count = 0
+        stable_count = 0
+        
+        while time.time() - start_time < timeout:
+            current_files = glob.glob(f"{base_path}-*.png")
+            current_count = len(current_files)
+            
+            if current_count > 0:
+                if current_count == last_count:
+                    stable_count += 1
+                    if stable_count >= 3:  # 连续3次检查文件数量不变
+                        return sorted(current_files)
+                else:
+                    stable_count = 0
+            
+            last_count = current_count
+            time.sleep(check_interval)
+        
+        return None
+
+    def xml2mp3(self, xml_path, musescore4_path):
+        import subprocess
+        mp3_path = xml_path.rsplit(".", 1)[0] + ".mp3"
+        try:
+            subprocess.run(
+                [musescore4_path, '-o', mp3_path, xml_path],
+                check=True,
+                capture_output=True,
+            )
+            # 等待MP3文件生成完成
+            if self.wait_for_file(mp3_path):
+                print(f"Conversion to {mp3_path} completed")
+                return mp3_path
+            else:
+                print("MP3 conversion timeout")
+                return None
+        except subprocess.CalledProcessError as e:
+            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+            return None
+
+    def xml2png(self, xml_path, musescore4_path):
+        import subprocess
+        
+        base_png_path = xml_path.rsplit(".", 1)[0]
+        try:
+            subprocess.run(
+                [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
+                check=True,
+                capture_output=True,
+            )
+            # 等待PNG序列生成完成
+            png_files = self.wait_for_png_sequence(base_png_path)
+            if png_files:
+                print(f"Converted to {len(png_files)} PNG files")
+                return png_files
+            else:
+                print("PNG conversion timeout")
+                return None
+        except subprocess.CalledProcessError as e:
+            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+            return None
+
+    def abc2xml(self, abc_path, output_dir, python_path):
+        import subprocess
+        xml_path = abc_path.rsplit(".", 1)[0] + ".xml"
+        try:
+            subprocess.run(
+                [python_path, f"{self.node_dir}/abc2xml.py", '-o', output_dir, abc_path, ],
+                check=True,
+                capture_output=True,
+            )
+            print(f"Conversion to {xml_path}",)
+            return xml_path
+        except subprocess.CalledProcessError as e:
+            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+            return None
+
 
 NODE_CLASS_MAPPINGS = {
     "NotaGenRun": NotaGenRun,

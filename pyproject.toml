@@ -1,7 +1,7 @@
 [project]
 name = "notagen-mw"
 description = "Symbolic Music Generation, NotaGen node for ComfyUI."
-version = "1.0.0"
+version = "2.0.0"
 license = {file = "LICENSE"}
 
 [project.urls]
