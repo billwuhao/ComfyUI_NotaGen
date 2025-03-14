@@ -319,12 +319,10 @@ class NotaGenRun:
                 image1,
                 f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",
             )
-
-        return (
-            self.get_empty_audio(),
-            self.get_empty_image(),
-            f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",
-        )
+        
+        else:
+            print(f".abc and .xml was saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}")
+            raise Exception("Conversion of .mp3 and .png failed, try again or check if MuseScore4 installation was successful.")
 
 
     def get_empty_audio(self):
