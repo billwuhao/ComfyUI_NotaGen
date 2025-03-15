@@ -292,15 +292,20 @@ class NotaGenRun:
                 
                 for image_path in png_paths:
                     i = Image.open(image_path)
-                    i = ImageOps.exif_transpose(i)
+                    # 创建一个白色背景的图像
+                    image = Image.new("RGB", i.size, (255, 255, 255))
+
+                    # 将透明背景的图片粘贴到白色背景上
+                    image.paste(i, mask=i.split()[3])  # 使用 Alpha 通道作为掩码
+                    # i = ImageOps.exif_transpose(i) # 翻转图片
                     
                     # 调整宽度为1024，保持宽高比
-                    width, height = i.size
-                    new_width = 1024
-                    new_height = int(height * (new_width / width))
-                    i = i.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                    # width, height = i.size
+                    # new_width = 1024
+                    # new_height = int(height * (new_width / width))
+                    # i = i.resize((new_width, new_height), Image.Resampling.LANCZOS)
                     
-                    image = i.convert("RGB")
+                    image = image.convert("RGB")
                     image = np.array(image).astype(np.float32) / 255.0
                     image = torch.from_numpy(image)[None,]
                     images.append(image)
@@ -467,45 +472,144 @@ class NotaGenRun:
 
     def xml2mp3(self, xml_path, musescore4_path):
         import subprocess
+        import sys
+        import tempfile
+
         mp3_path = xml_path.rsplit(".", 1)[0] + ".mp3"
-        try:
-            subprocess.run(
-                [musescore4_path, '-o', mp3_path, xml_path],
-                check=True,
-                capture_output=True,
-            )
-            # 等待MP3文件生成完成
-            if self.wait_for_file(mp3_path):
-                print(f"Conversion to {mp3_path} completed")
-                return mp3_path
-            else:
-                print("MP3 conversion timeout")
+        # 检测操作系统是否为 Linux
+        if sys.platform == "linux":
+            try:
+                # 使用不同的显示端口
+                display_number = 100
+                os.environ["DISPLAY"] = f":{display_number}"
+
+                # 检查并清理旧的 Xvfb 锁文件
+                tmp_dir = tempfile.mkdtemp()
+                xvfb_lock_file = os.path.join(tmp_dir, f".X{display_number}-lock")
+                if os.path.exists(xvfb_lock_file):
+                    print(f"清理旧的 Xvfb 锁文件: {xvfb_lock_file}")
+                    os.remove(xvfb_lock_file)
+
+                # 杀死所有残留的 Xvfb 进程
+                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  # 忽略错误
+                time.sleep(1)  # 等待进程终止
+
+                # 启动 Xvfb
+                xvfb_process = subprocess.Popen(["Xvfb", f":{display_number}", "-screen", "0", "1024x768x24"])
+                time.sleep(2)  # 等待 Xvfb 启动
+
+                # 设置 Qt 插件环境变量
+                os.environ["QT_QPA_PLATFORM"] = "offscreen"
+                
+                # 运行 mscore 命令
+                subprocess.run(
+                    [musescore4_path, '-o', mp3_path, xml_path],
+                    check=True,
+                    capture_output=True,
+                )
+                
+                # 等待MP3文件生成完成
+                if self.wait_for_file(mp3_path):
+                    print(f"Conversion to {mp3_path} completed")
+                    return mp3_path
+                else:
+                    print("MP3 conversion timeout")
+                    return None
+            except subprocess.CalledProcessError as e:
+                print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
-        except subprocess.CalledProcessError as e:
-            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
-            return None
+            finally:
+                # 关闭 Xvfb
+                xvfb_process.terminate()
+                xvfb_process.wait()
+        else:
+            try:
+                subprocess.run(
+                    [musescore4_path, '-o', mp3_path, xml_path],
+                    check=True,
+                    capture_output=True,
+                )
+                # 等待MP3文件生成完成
+                if self.wait_for_file(mp3_path):
+                    print(f"Conversion to {mp3_path} completed")
+                    return mp3_path
+                else:
+                    print("MP3 conversion timeout")
+                    return None
+            except subprocess.CalledProcessError as e:
+                print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+                return None
 
     def xml2png(self, xml_path, musescore4_path):
         import subprocess
+        import sys
+        import tempfile
         
         base_png_path = xml_path.rsplit(".", 1)[0]
-        try:
-            subprocess.run(
-                [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
-                check=True,
-                capture_output=True,
-            )
-            # 等待PNG序列生成完成
-            png_files = self.wait_for_png_sequence(base_png_path)
-            if png_files:
-                print(f"Converted to {len(png_files)} PNG files")
-                return png_files
-            else:
-                print("PNG conversion timeout")
+        # 检测操作系统是否为 Linux
+        if sys.platform == "linux":
+            try:
+                # 使用不同的显示端口
+                display_number = 100
+                os.environ["DISPLAY"] = f":{display_number}"
+
+                # 检查并清理旧的 Xvfb 锁文件
+                tmp_dir = tempfile.mkdtemp()
+                xvfb_lock_file = os.path.join(tmp_dir, f".X{display_number}-lock")
+                if os.path.exists(xvfb_lock_file):
+                    print(f"清理旧的 Xvfb 锁文件: {xvfb_lock_file}")
+                    os.remove(xvfb_lock_file)
+
+                # 杀死所有残留的 Xvfb 进程
+                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  # 忽略错误
+                time.sleep(1)  # 等待进程终止
+
+                # 启动 Xvfb
+                xvfb_process = subprocess.Popen(["Xvfb", f":{display_number}", "-screen", "0", "1024x768x24"])
+                time.sleep(2)  # 等待 Xvfb 启动
+
+                # 设置 Qt 插件环境变量
+                os.environ["QT_QPA_PLATFORM"] = "offscreen"
+                
+                # 运行 mscore 命令
+                subprocess.run(
+                    [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
+                    check=True,
+                    capture_output=True,
+                )
+                # 等待PNG序列生成完成
+                png_files = self.wait_for_png_sequence(base_png_path)
+                if png_files:
+                    print(f"Converted to {len(png_files)} PNG files")
+                    return png_files
+                else:
+                    print("PNG conversion timeout")
+                    return None
+            except subprocess.CalledProcessError as e:
+                print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
-        except subprocess.CalledProcessError as e:
-            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
-            return None
+            finally:
+                # 关闭 Xvfb
+                xvfb_process.terminate()
+                xvfb_process.wait()
+        else:
+            try:
+                subprocess.run(
+                    [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
+                    check=True,
+                    capture_output=True,
+                )
+                # 等待PNG序列生成完成
+                png_files = self.wait_for_png_sequence(base_png_path)
+                if png_files:
+                    print(f"Converted to {len(png_files)} PNG files")
+                    return png_files
+                else:
+                    print("PNG conversion timeout")
+                    return None
+            except subprocess.CalledProcessError as e:
+                print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+                return None
 
     def abc2xml(self, abc_path, output_dir, python_path):
         import subprocess
