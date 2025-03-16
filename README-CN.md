@@ -2,6 +2,8 @@
 
 # 符号音乐生成. NotaGen 的 ComfyUI 节点.
 
+https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
+
 ![image](https://github.com/billwuhao/ComfyUI_NotaGen/blob/master/images/2025-03-10_06-24-03.png)
 
 
