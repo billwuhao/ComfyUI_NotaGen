@@ -8,6 +8,8 @@ https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
 
 ## 📣 Updates
 
+[2025-03-21] ⚒️: Added more tunable parameters for more creative freedom. Optional model unloading.
+
 [2025-03-15]⚒️: Supports Linux Ubuntu/Debian series, as well as servers, others untested, as well as servers.
 
 For local Linux computers, install `musescore` etc.:
