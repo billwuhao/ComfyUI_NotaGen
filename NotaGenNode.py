@@ -73,7 +73,7 @@ class NotaGenRun:
     RETURN_TYPES = ("AUDIO", "IMAGE", "STRING")
     RETURN_NAMES = ("audio", "score", "message")
     FUNCTION = "inference_patch"
-    CATEGORY = "MW/MW-NotaGen"
+    CATEGORY = "🎤MW/MW-NotaGen"
 
     def inference_patch(self, model, period, composer, instrumentation, 
                         custom_prompt,
