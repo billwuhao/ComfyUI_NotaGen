@@ -120,10 +120,11 @@ class NotaGenRun:
         nota_model_path = os.path.join(self.nota_model_path, model)
         if self.model_cache is None:
             checkpoint = torch.load(nota_model_path, map_location=torch.device(self.device))
-            self.model_cache = checkpoint
-        else:
-            checkpoint = self.model_cache
-        nota_model.load_state_dict(checkpoint['model'])
+            NotaGenRun.model_cache = checkpoint
+            del checkpoint
+            torch.cuda.empty_cache()
+            
+        nota_model.load_state_dict(self.model_cache['model'])
         nota_model = nota_model.to(self.device)
         nota_model.eval()
 
@@ -338,9 +339,8 @@ class NotaGenRun:
             if unload_model:
                 del patchilizer
                 del nota_model
-                del checkpoint
+                NotaGenRun.model_cache = None
                 torch.cuda.empty_cache()
-                self.model_cache = None
 
             return (
                 audio,
@@ -352,9 +352,9 @@ class NotaGenRun:
             if unload_model:
                 del patchilizer
                 del nota_model
-                del checkpoint
+                NotaGenRun.model_cache = None
                 torch.cuda.empty_cache()
-                self.model_cache = None
+                
             print(f".abc and .xml was saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}")
             raise Exception("Conversion of .mp3 and .png failed, try again or check if MuseScore4 installation was successful.")
 
