@@ -58,15 +58,6 @@ class NotaGenRun:
                 "top_k": ("INT", {"default": 50, "min": 0}),
                 "top_p": ("FLOAT", {"default": 0.95, "min": 0, "max": 1, "step": 0.01}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                "comfy_python_path": ("STRING", {
-                    "default": "", 
-                    "multiline": False, 
-                    "tooltip": "Absolute path of python.exe in ComfyUI environment"
-                }),
-                "musescore4_path": ("STRING", {
-                    "default": "", 
-                    "tooltip": r"Absolute path e.g. D:\APP\MuseScorePortable\App\MuseScore\bin\MuseScore4.exe"
-                }),
             },
         }
 
@@ -77,8 +68,6 @@ class NotaGenRun:
 
     def inference_patch(self, model, period, composer, instrumentation, 
                         custom_prompt,
-                        comfy_python_path, 
-                        musescore4_path,
                         unload_model,
                         temperature,
                         top_k,
@@ -256,10 +245,11 @@ class NotaGenRun:
                     with open(unreduced_output_path, 'w') as file:
                         file.writelines(abc_lines)
                         print(f"Saved to {unreduced_output_path}",)
-                    unreduced_xml_path = self.abc2xml(unreduced_output_path, INTERLEAVED_OUTPUT_FOLDER, comfy_python_path)
+                    unreduced_xml_path = self.convert_abc2xml(unreduced_output_path, INTERLEAVED_OUTPUT_FOLDER)
                     if unreduced_xml_path:
                         save_xml_original = True
                     else:
+                        print("Conversion xml failed.")
                         num_gen += 1
                         save_xml_original = False
                         
@@ -274,7 +264,7 @@ class NotaGenRun:
                         print(f"Saved to {original_output_path}",)
                     
                     if save_xml_original:
-                        original_xml_path = self.abc2xml(original_output_path, ORIGINAL_OUTPUT_FOLDER, comfy_python_path)
+                        original_xml_path = self.convert_abc2xml(original_output_path, ORIGINAL_OUTPUT_FOLDER)
                         if original_xml_path:
                             print(f"Conversion to {original_xml_path}",)
                         break
@@ -289,8 +279,8 @@ class NotaGenRun:
                     raise Exception("All generation attempts failed after 6 tries. Try again.")
 
         if unreduced_xml_path:
-            mp3_path = self.xml2mp3(unreduced_xml_path, musescore4_path)
-            png_paths = self.xml2png(unreduced_xml_path, musescore4_path)
+            mp3_path = self.xml2mp3(unreduced_xml_path)
+            png_paths = self.xml2png(unreduced_xml_path)
                 
             # 处理音频
             audio = None
@@ -499,7 +489,7 @@ class NotaGenRun:
         
         return None
 
-    def xml2mp3(self, xml_path, musescore4_path):
+    def xml2mp3(self, xml_path):
         import subprocess
         import sys
         import tempfile
@@ -532,7 +522,7 @@ class NotaGenRun:
                 
                 # 运行 mscore 命令
                 subprocess.run(
-                    [musescore4_path, '-o', mp3_path, xml_path],
+                    ['mscore', '-o', mp3_path, xml_path],
                     check=True,
                     capture_output=True,
                 )
@@ -553,8 +543,11 @@ class NotaGenRun:
                 xvfb_process.wait()
         else:
             try:
+                import shutil
+                musescore_executable_path = shutil.which('MuseScore4')
+                print(musescore_executable_path)
                 subprocess.run(
-                    [musescore4_path, '-o', mp3_path, xml_path],
+                    [musescore_executable_path, '-o', mp3_path, xml_path],
                     check=True,
                     capture_output=True,
                 )
@@ -569,7 +562,7 @@ class NotaGenRun:
                 print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
 
-    def xml2png(self, xml_path, musescore4_path):
+    def xml2png(self, xml_path):
         import subprocess
         import sys
         import tempfile
@@ -602,7 +595,7 @@ class NotaGenRun:
                 
                 # 运行 mscore 命令
                 subprocess.run(
-                    [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
+                    ['mscore', '-o', f"{base_png_path}.png", xml_path],
                     check=True,
                     capture_output=True,
                 )
@@ -623,8 +616,11 @@ class NotaGenRun:
                 xvfb_process.wait()
         else:
             try:
+                import shutil
+                musescore_executable_path = shutil.which('MuseScore4')
+                print(musescore_executable_path)
                 subprocess.run(
-                    [musescore4_path, '-o', f"{base_png_path}.png", xml_path],
+                    [musescore_executable_path, '-o', f"{base_png_path}.png", xml_path],
                     check=True,
                     capture_output=True,
                 )
@@ -640,19 +636,31 @@ class NotaGenRun:
                 print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
 
-    def abc2xml(self, abc_path, output_dir, python_path):
-        import subprocess
+    def convert_abc2xml(self, abc_path, output_dir):
+        import sys
+        import os
+        sys.path.append(self.node_dir)
+        from abc2xml import getXmlDocs, writefile, readfile, info
         xml_path = abc_path.rsplit(".", 1)[0] + ".xml"
         try:
-            subprocess.run(
-                [python_path, f"{self.node_dir}/abc2xml.py", '-o', output_dir, abc_path, ],
-                check=True,
-                capture_output=True,
-            )
+            fnm, ext = os.path.splitext(abc_path)
+            abctext = readfile(abc_path)
+            
+            # 设置参数，对应原命令行参数
+            skip, num = 0, 1  # 对应 -m 参数
+            show_whole_rests = False  # 对应 -r 参数
+            line_breaks = False  # 对应 -b 参数
+            force_string_fret = False  # 对应 -f 参数
+            
+            xml_docs = getXmlDocs(abctext, skip, num, show_whole_rests, line_breaks, force_string_fret)
+            
+            for itune, xmldoc in enumerate(xml_docs):
+                fnmNum = '%02d' % (itune + 1) if len(xml_docs) > 1 else ''
+                writefile(output_dir, fnm, fnmNum, xmldoc, '', False)  # '' 对应 -mxl 参数，False 对应 -t 参数
             print(f"Conversion to {xml_path}",)
             return xml_path
-        except subprocess.CalledProcessError as e:
-            print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
+        except Exception as e:
+            print(f"Conversion failed: {str(e)}")
             return None
 
 

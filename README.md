@@ -8,6 +8,8 @@ https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
 
 ## 📣 Updates
 
+[2025-04-09]⚒️: It is no longer necessary to input MuseScore4 or mscore and the Python path. You only need to add the MuseScore4 or mscore installation directory (e.g., `C:\Program Files\MuseScore 4\bin`) to the system path environment variable.
+
 [2025-03-21] ⚒️: Added more tunable parameters for more creative freedom. Optional model unloading.
 
 [2025-03-15]⚒️: Supports Linux Ubuntu/Debian series, as well as servers, others untested, as well as servers.
@@ -18,7 +20,6 @@ sudo apt update
 sudo apt install musescore
 sudo apt install libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0
 ```
-Then input the `mscore` path into the node, such as `/bin/mscore`. And the absolute path of `python` in ComfyUI, such as `/root/comfy/ComfyUI/bin/python`.
 
 For servers, install the virtual display Xvfb, other operations are the same as above:
 ```
@@ -31,8 +32,6 @@ sudo apt install xvfb
 - Automatically convert generated `.abc` to `.xml`, `.mp3`, and `.png` formats.  Now you can listen to the generated music and see the sheet music too! 🎵🎵🎵
 
 - Supports custom prompts. The format must be maintained as `<period>|<composer>|<instrumentation>`, with the order of `period`, `composer`, and `instrumentation` strictly enforced and separated by `|`.
-
-- To avoid the hassle of configuring environment variables, please install [MuseScore4](https://musescore.org/en/download) and enter the absolute path of `MuseScore4.exe` into the node, such as `D:\APP\MuseScorePortable\App\MuseScore\bin\MuseScore4.exe`, as well as the absolute path of `python.exe` in ComfyUI, such as `D:\AIGC\APP\ComfyUI_v1\python_embeded\python.exe`.
 
 ## Installation
 

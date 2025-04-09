@@ -9,6 +9,8 @@ https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
 
 ## 📣 更新
 
+[2025-04-09]⚒️: 不再需要输入 MuseScore4 或 mscore 以及 python 路径, 只需要将 MuseScore4 或 mscore 安装目录例如 `C:\Program Files\MuseScore 4\bin` 添加到系统 path 环境变量即可.
+
 [2025-03-21]⚒️: 增加更多可调参数, 更自由畅玩. 可选是否卸载模型.
 
 [2025-03-15]⚒️: 支持 Linux Ubuntu/Debian 系列, 以及服务器, 其他未测试.
@@ -19,7 +21,6 @@ sudo apt update
 sudo apt install musescore
 sudo apt install libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0
 ```
-然后将 `mscore` 路径输入节点即可, 如 `/bin/mscore`. 以及 comfyui 中 `python` 的绝对路径, 如 `/root/comfy/ComfyUI/bin/python`.
 
 服务器, 安装虚拟显示器 Xvfb, 其他操作同上:
 ```
@@ -32,8 +33,6 @@ sudo apt install xvfb
 - 生成 `.abc` 自动转 `.xml`, `.mp3`, `.png` 格式, 可以听生成的音乐, 同时可以看曲谱啦🎵🎵🎵
 
 - 支持自定义 prompt, 格式必须保持 `<period>|<composer>|<instrumentation>` 的格式, `period`, `composer`, `instrumentation` 的顺序不能乱, 而且以 `|` 分割.
-
-- 为了避免配置环境变量的麻烦, 请安装 [MuseScore4](https://musescore.org/en/download), 并将 `MuseScore4.exe` 的绝对路径输入节点中, 如 `D:\APP\MuseScorePortable\App\MuseScore\bin\MuseScore4.exe`, 以及 comfyui 中 `python.exe` 的绝对路径, 如 `D:\AIGC\APP\ComfyUI_v1\python_embeded\python.exe`.
 
 ## 安装
 
