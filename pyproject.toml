@@ -11,4 +11,4 @@ Repository = "https://github.com/billwuhao/ComfyUI_NotaGen"
 [tool.comfy]
 PublisherId = "mw"
 DisplayName = "ComfyUI_NotaGen"
-Icon = "https://github.com/billwuhao/aiart.website/blob/master/hb.png"
+Icon = ""
