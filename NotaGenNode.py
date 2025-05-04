@@ -35,11 +35,15 @@ class NotaGenRun:
                 "Ravel, Maurice", "Saint-Saens, Camille", "Satie, Erik", "Schubert, Franz", "Schumann, Clara", "Schumann, Robert", "Scriabin, Aleksandr", 
                 "Shostakovich, Dmitry", "Sibelius, Jean", "Smetana, Bedrich", "Tchaikovsky, Pyotr", "Viardot, Pauline", "Warlock, Peter", "Wolf, Hugo", "Zumsteeg, Emilie"]
     instrumentations = ["Chamber", "Choral", "Keyboard", "Orchestral", "Vocal-Orchestral", "Art Song"]
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    nota_model_path = nota_model_path
-    node_dir = node_dir
+    
+    def __init__(self):
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.nota_model_path = nota_model_path
+        self.node_dir = node_dir
+        self.model_cache = None
+        self.nota_model = None
+        self.patchilizer = None
 
-    model_cache = None
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -53,7 +57,7 @@ class NotaGenRun:
                     "multiline": True, 
                     "tooltip": "Custom prompt must follow format: <period>|<composer>|<instrumentation>"
                 }),
-                "unload_model":("BOOLEAN", {"default": False}),
+                "unload_model":("BOOLEAN", {"default": True}),
                 "temperature": ("FLOAT", {"default": 0.8, "min": 0, "max": 5, "step": 0.1}),
                 "top_k": ("INT", {"default": 50, "min": 0}),
                 "top_p": ("FLOAT", {"default": 0.95, "min": 0, "max": 1, "step": 0.01}),
@@ -108,14 +112,13 @@ class NotaGenRun:
 
         nota_model_path = os.path.join(self.nota_model_path, model)
         if self.model_cache is None:
-            checkpoint = torch.load(nota_model_path, map_location=torch.device(self.device))
-            NotaGenRun.model_cache = checkpoint
-            del checkpoint
-            torch.cuda.empty_cache()
-            
-        nota_model.load_state_dict(self.model_cache['model'])
-        nota_model = nota_model.to(self.device)
-        nota_model.eval()
+            self.model_cache = torch.load(nota_model_path, map_location=torch.device(self.device))
+
+        if self.nota_model is None:
+            self.nota_model = nota_model
+            self.nota_model.load_state_dict(self.model_cache['model'])
+            self.nota_model = self.nota_model.to(self.device)
+            self.nota_model.eval()
 
         if custom_prompt.strip():
             period, composer, instrumentation = [i.strip() for i in custom_prompt.split('|')]
@@ -125,10 +128,11 @@ class NotaGenRun:
             '%' + composer + '\n',
             '%' + instrumentation + '\n']
 
-        patchilizer = Patchilizer(model)
+        if self.patchilizer is None:
+            self.patchilizer  = Patchilizer(model)
 
         # file_no = 1
-        bos_patch = [patchilizer.bos_token_id] * (patch_size - 1) + [patchilizer.eos_token_id]
+        bos_patch = [self.patchilizer.bos_token_id] * (patch_size - 1) + [self.patchilizer.eos_token_id]
         num_gen = 0
         unreduced_xml_path = None
         save_xml_original = False
@@ -137,11 +141,11 @@ class NotaGenRun:
             start_time = time.time()
             # start_time_format = time.strftime("%Y%m%d-%H%M%S")
 
-            prompt_patches = patchilizer.patchilize_metadata(prompt_lines)
+            prompt_patches = self.patchilizer.patchilize_metadata(prompt_lines)
             byte_list = list(''.join(prompt_lines))
             print(''.join(byte_list), end='')
 
-            prompt_patches = [[ord(c) for c in patch] + [patchilizer.special_token_id] * (patch_size - len(patch)) for patch
+            prompt_patches = [[ord(c) for c in patch] + [self.patchilizer.special_token_id] * (patch_size - len(patch)) for patch
                             in prompt_patches]
             prompt_patches.insert(0, bos_patch)
 
@@ -153,23 +157,23 @@ class NotaGenRun:
 
             tunebody_flag = False
             while True:
-                predicted_patch = nota_model.generate(input_patches.unsqueeze(0),
+                predicted_patch = self.nota_model.generate(input_patches.unsqueeze(0),
                                                 top_k=top_k,
                                                 top_p=top_p,
                                                 temperature=temperature)
-                if not tunebody_flag and patchilizer.decode([predicted_patch]).startswith('[r:'):  # start with [r:0/
+                if not tunebody_flag and self.patchilizer.decode([predicted_patch]).startswith('[r:'):  # start with [r:0/
                     tunebody_flag = True
                     r0_patch = torch.tensor([ord(c) for c in '[r:0/']).unsqueeze(0).to(self.device)
                     temp_input_patches = torch.concat([input_patches, r0_patch], axis=-1)
-                    predicted_patch = nota_model.generate(temp_input_patches.unsqueeze(0),
+                    predicted_patch = self.nota_model.generate(temp_input_patches.unsqueeze(0),
                                                     top_k=top_k,
                                                     top_p=top_p,
                                                     temperature=temperature)
                     predicted_patch = [ord(c) for c in '[r:0/'] + predicted_patch
-                if predicted_patch[0] == patchilizer.bos_token_id and predicted_patch[1] == patchilizer.eos_token_id:
+                if predicted_patch[0] == self.patchilizer.bos_token_id and predicted_patch[1] == self.patchilizer.eos_token_id:
                     end_flag = True
                     break
-                next_patch = patchilizer.decode([predicted_patch])
+                next_patch = self.patchilizer.decode([predicted_patch])
 
                 for char in next_patch:
                     byte_list.append(char)
@@ -178,8 +182,8 @@ class NotaGenRun:
                 patch_end_flag = False
                 for j in range(len(predicted_patch)):
                     if patch_end_flag:
-                        predicted_patch[j] = patchilizer.special_token_id
-                    if predicted_patch[j] == patchilizer.eos_token_id:
+                        predicted_patch[j] = self.patchilizer.special_token_id
+                    if predicted_patch[j] == self.patchilizer.eos_token_id:
                         patch_end_flag = True
 
                 predicted_patch = torch.tensor([predicted_patch], device=self.device)  # (1, 16)
@@ -219,7 +223,7 @@ class NotaGenRun:
                         cut_index = len(tunebody_lines) // 2
 
                     abc_code_slice = ''.join(metadata_lines + tunebody_lines[-cut_index:])
-                    input_patches = patchilizer.encode_generate(abc_code_slice)
+                    input_patches = self.patchilizer.encode_generate(abc_code_slice)
 
                     input_patches = [item for sublist in input_patches for item in sublist]
                     input_patches = torch.tensor([input_patches], device=self.device)
@@ -327,9 +331,11 @@ class NotaGenRun:
                 image1 = self.get_empty_image()
 
             if unload_model:
-                del patchilizer
-                del nota_model
-                NotaGenRun.model_cache = None
+                import gc
+                self.patchilizer = None
+                self.nota_model = None
+                self.model_cache = None
+                gc.collect()
                 torch.cuda.empty_cache()
 
             return (
@@ -340,9 +346,11 @@ class NotaGenRun:
         
         else:
             if unload_model:
-                del patchilizer
-                del nota_model
-                NotaGenRun.model_cache = None
+                import gc
+                self.patchilizer = None
+                self.nota_model = None
+                self.model_cache = None
+                gc.collect()
                 torch.cuda.empty_cache()
                 
             print(f".abc and .xml was saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}")
