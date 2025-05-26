@@ -8,7 +8,7 @@ https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
 
 ## 📣 Updates
 
-[2025-04-09]⚒️: It is no longer necessary to input MuseScore4 or mscore and the Python path. You only need to add the MuseScore4 or mscore installation directory (e.g., `C:\Program Files\MuseScore 4\bin`) to the system path environment variable.
+[2025-04-09]⚒️: It is no longer necessary to input MuseScore4 or mscore and the Python path. You only need to add the MuseScore4 or mscore installation directory (e.g., `C:\Program Files\MuseScore 4\bin`) to the system path environment variable. If you still cannot find MuseScore4 or mscore, launch Comfyui using the official startup script, such as run_nvidia_gpu.bat.
 
 [2025-03-21] ⚒️: Added more tunable parameters for more creative freedom. Optional model unloading.
 

@@ -9,12 +9,12 @@ https://github.com/user-attachments/assets/0671657f-e66b-4000-a0aa-48520f15b782
 
 ## 📣 更新
 
-[2025-04-09]⚒️: 不再需要输入 MuseScore4 或 mscore 以及 python 路径, 只需要将 MuseScore4 或 mscore 安装目录例如 `C:\Program Files\MuseScore 4\bin` 添加到系统 path 环境变量即可.
+[2025-04-09]⚒️: 不再需要输入 MuseScore4 或 mscore 以及 python 路径, 只需要将 MuseScore4 或 mscore 安装目录例如 `C:\Program Files\MuseScore 4\bin` 添加到系统 path 环境变量即可. 如果仍然找不到 MuseScore4 或 mscore, 请启动 ComfyUI 时, 用 ComfyUI 官方启动脚本例如 `run_nvidia_gpu.bat`.
 
 [2025-03-21]⚒️: 增加更多可调参数, 更自由畅玩. 可选是否卸载模型.
 
 [2025-03-15]⚒️: 支持 Linux Ubuntu/Debian 系列, 以及服务器, 其他未测试.
- 
+
 本地 Linux 电脑, 安装 `musescore` 等:
 ```
 sudo apt update

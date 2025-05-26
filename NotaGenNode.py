@@ -5,22 +5,20 @@ from .utils import *
 from .config import nota_lx, nota_small, nota_medium
 from transformers import GPT2Config
 from abctoolkit.utils import Barline_regexPattern
-# from abctoolkit.transpose import Note_list, Pitch_sign_list
+
 from abctoolkit.duration import calculate_bartext_duration
 
 node_dir = os.path.dirname(os.path.abspath(__file__))
 comfy_path = os.path.dirname(os.path.dirname(node_dir))
 output_path = os.path.join(comfy_path, "output")
-# Path to weights for inference
+
 nota_model_path = os.path.join(comfy_path, "models", "TTS", "NotaGen")
 
-# Folder to save output files
 ORIGINAL_OUTPUT_FOLDER = os.path.join(output_path, 'notagen_original')
 INTERLEAVED_OUTPUT_FOLDER = os.path.join(output_path, 'notagen_interleaved')
 
 os.makedirs(ORIGINAL_OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(INTERLEAVED_OUTPUT_FOLDER, exist_ok=True)
-
 
 MODEL_CACHE = None
 PATCHILIZER = None
@@ -37,10 +35,9 @@ class NotaGenRun:
                 "Ravel, Maurice", "Saint-Saens, Camille", "Satie, Erik", "Schubert, Franz", "Schumann, Clara", "Schumann, Robert", "Scriabin, Aleksandr", 
                 "Shostakovich, Dmitry", "Sibelius, Jean", "Smetana, Bedrich", "Tchaikovsky, Pyotr", "Viardot, Pauline", "Warlock, Peter", "Wolf, Hugo", "Zumsteeg, Emilie"]
     instrumentations = ["Chamber", "Choral", "Keyboard", "Orchestral", "Vocal-Orchestral", "Art Song"]
-    
+
     def __init__(self):
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        nota_model_path = nota_model_path
         self.node_dir = node_dir
 
     @classmethod
@@ -109,11 +106,11 @@ class NotaGenRun:
 
         print("Parameter Number: " + str(sum(p.numel() for p in nota_model.parameters() if p.requires_grad)))
 
-        nota_model_path = os.path.join(nota_model_path, model)
+        model_file_path = os.path.join(nota_model_path, model)
 
         global MODEL_CACHE, PATCHILIZER
         if MODEL_CACHE is None:
-            MODEL_CACHE = torch.load(nota_model_path, map_location=torch.device(self.device))
+            MODEL_CACHE = torch.load(model_file_path, map_location=torch.device(self.device))
             nota_model.load_state_dict(MODEL_CACHE['model'])
             nota_model = nota_model.to(self.device)
             nota_model.eval()
@@ -129,7 +126,6 @@ class NotaGenRun:
         if PATCHILIZER is None:
             PATCHILIZER  = Patchilizer(model)
 
-        # file_no = 1
         bos_patch = [PATCHILIZER.bos_token_id] * (patch_size - 1) + [PATCHILIZER.eos_token_id]
         num_gen = 0
         unreduced_xml_path = None
@@ -137,7 +133,6 @@ class NotaGenRun:
         while num_gen <= 5: #num_samples:
 
             start_time = time.time()
-            # start_time_format = time.strftime("%Y%m%d-%H%M%S")
 
             prompt_patches = PATCHILIZER.patchilize_metadata(prompt_lines)
             byte_list = list(''.join(prompt_lines))
@@ -159,7 +154,7 @@ class NotaGenRun:
                                                 top_k=top_k,
                                                 top_p=top_p,
                                                 temperature=temperature)
-                if not tunebody_flag and PATCHILIZER.decode([predicted_patch]).startswith('[r:'):  # start with [r:0/
+                if not tunebody_flag and PATCHILIZER.decode([predicted_patch]).startswith('[r:'):  
                     tunebody_flag = True
                     r0_patch = torch.tensor([ord(c) for c in '[r:0/']).unsqueeze(0).to(self.device)
                     temp_input_patches = torch.concat([input_patches, r0_patch], axis=-1)
@@ -184,8 +179,8 @@ class NotaGenRun:
                     if predicted_patch[j] == PATCHILIZER.eos_token_id:
                         patch_end_flag = True
 
-                predicted_patch = torch.tensor([predicted_patch], device=self.device)  # (1, 16)
-                input_patches = torch.cat([input_patches, predicted_patch], dim=1)  # (1, 16 * patch_len)
+                predicted_patch = torch.tensor([predicted_patch], device=self.device)  
+                input_patches = torch.cat([input_patches, predicted_patch], dim=1)  
 
                 if len(byte_list) > 102400:  
                     failure_flag = True
@@ -233,14 +228,13 @@ class NotaGenRun:
                 abc_text = ''.join(byte_list)
                 filename = time.strftime("%Y%m%d-%H%M%S") + \
                         "_" + str(int(generation_time_cost)) + ".abc"
-                        
-                # unreduce
+
                 unreduced_output_path = os.path.join(INTERLEAVED_OUTPUT_FOLDER, filename)
-                
+
                 abc_lines = abc_text.split('\n')
                 abc_lines = list(filter(None, abc_lines))
                 abc_lines = [line + '\n' for line in abc_lines]
-                
+
                 try:
                     abc_lines = self.rest_unreduce(abc_lines)
 
@@ -254,17 +248,17 @@ class NotaGenRun:
                         print("Conversion xml failed.")
                         num_gen += 1
                         save_xml_original = False
-                        
+
                 except:
                     num_gen += 1
                     continue
                 else:
-                    # original
+
                     original_output_path = os.path.join(ORIGINAL_OUTPUT_FOLDER, filename)
                     with open(original_output_path, 'w') as w:
                         w.write(abc_text)
                         print(f"Saved to {original_output_path}",)
-                    
+
                     if save_xml_original:
                         original_xml_path = self.convert_abc2xml(original_output_path, ORIGINAL_OUTPUT_FOLDER)
                         if original_xml_path:
@@ -273,7 +267,7 @@ class NotaGenRun:
                     else:
                         num_gen += 1
                         continue
-                    # file_no += 1
+
             else:
                 print('Generation failed.')
                 num_gen += 1
@@ -283,8 +277,7 @@ class NotaGenRun:
         if unreduced_xml_path:
             mp3_path = self.xml2mp3(unreduced_xml_path)
             png_paths = self.xml2png(unreduced_xml_path)
-                
-            # 处理音频
+
             audio = None
             if mp3_path and os.path.exists(mp3_path):
                 import torchaudio
@@ -292,33 +285,24 @@ class NotaGenRun:
                 audio = {"waveform": waveform.unsqueeze(0), "sample_rate": sample_rate}
             else:
                 audio = self.get_empty_audio()
-            
-            # 处理图片
+
             images = []
             if png_paths:
                 from PIL import Image, ImageOps
                 import numpy as np
-                
+
                 for image_path in png_paths:
                     i = Image.open(image_path)
-                    # 创建一个白色背景的图像
+
                     image = Image.new("RGB", i.size, (255, 255, 255))
 
-                    # 将透明背景的图片粘贴到白色背景上
-                    image.paste(i, mask=i.split()[3])  # 使用 Alpha 通道作为掩码
-                    # i = ImageOps.exif_transpose(i) # 翻转图片
-                    
-                    # 调整宽度为1024，保持宽高比
-                    # width, height = i.size
-                    # new_width = 1024
-                    # new_height = int(height * (new_width / width))
-                    # i = i.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                    
+                    image.paste(i, mask=i.split()[3])  
+
                     image = image.convert("RGB")
                     image = np.array(image).astype(np.float32) / 255.0
                     image = torch.from_numpy(image)[None,]
                     images.append(image)
-                
+
                 if len(images) > 1:
                     image1 = images[0]
                     for image2 in images[1:]:
@@ -341,7 +325,7 @@ class NotaGenRun:
                 image1,
                 f"Saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}",
             )
-        
+
         else:
             if unload_model:
                 import gc
@@ -350,10 +334,9 @@ class NotaGenRun:
                 MODEL_CACHE = None
                 gc.collect()
                 torch.cuda.empty_cache()
-                
+
             print(f".abc and .xml was saved to {INTERLEAVED_OUTPUT_FOLDER} and {ORIGINAL_OUTPUT_FOLDER}")
             raise Exception("Conversion of .mp3 and .png failed, try again or check if MuseScore4 installation was successful.")
-
 
     def get_empty_audio(self):
         """Return empty audio"""
@@ -387,8 +370,8 @@ class NotaGenRun:
                 part_symbol_list.append(symbol)
                 if symbol[2:] not in existed_voices:
                     voice_group_list.append([symbol[2:]])
-        z_symbol_list = []  # voices that use z as rest
-        x_symbol_list = []  # voices that use x as rest
+        z_symbol_list = []  
+        x_symbol_list = []  
         for voice_group in voice_group_list:
             z_symbol_list.append('V:' + voice_group[0])
             for j in range(1, len(voice_group)):
@@ -412,7 +395,6 @@ class NotaGenRun:
                 value = match[1]
                 line_bar_dict[key] = value
 
-            # calculate duration and collect barline
             dur_dict = {}  
             for symbol, bartext in line_bar_dict.items():
                 right_barline = ''.join(re.split(Barline_regexPattern, bartext)[-2:])
@@ -430,7 +412,7 @@ class NotaGenRun:
             try:
                 ref_dur = max(dur_dict, key=dur_dict.get)
             except:
-                pass    # use last ref_dur
+                pass    
 
             if i == 0:
                 prefix_left_barline = line.split('[V:')[0]
@@ -456,10 +438,10 @@ class NotaGenRun:
     def wait_for_file(self, file_path, timeout=15, check_interval=0.3):
         """Wait for file generation to complete"""
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             if os.path.exists(file_path):
-                # 对于MP3文件，检查文件大小是否不再变化
+
                 if file_path.endswith('.mp3'):
                     initial_size = os.path.getsize(file_path)
                     time.sleep(check_interval)
@@ -473,26 +455,26 @@ class NotaGenRun:
     def wait_for_png_sequence(self, base_path, timeout=15, check_interval=0.3):
         """Wait for PNG sequence generation to complete"""
         import glob
-        
+
         start_time = time.time()
         last_count = 0
         stable_count = 0
-        
+
         while time.time() - start_time < timeout:
             current_files = glob.glob(f"{base_path}-*.png")
             current_count = len(current_files)
-            
+
             if current_count > 0:
                 if current_count == last_count:
                     stable_count += 1
-                    if stable_count >= 3:  # 连续3次检查文件数量不变
+                    if stable_count >= 3:  
                         return sorted(current_files)
                 else:
                     stable_count = 0
-            
+
             last_count = current_count
             time.sleep(check_interval)
-        
+
         return None
 
     def xml2mp3(self, xml_path):
@@ -501,39 +483,33 @@ class NotaGenRun:
         import tempfile
 
         mp3_path = xml_path.rsplit(".", 1)[0] + ".mp3"
-        # 检测操作系统是否为 Linux
+
         if sys.platform == "linux":
             try:
-                # 使用不同的显示端口
+
                 display_number = 100
                 os.environ["DISPLAY"] = f":{display_number}"
 
-                # 检查并清理旧的 Xvfb 锁文件
                 tmp_dir = tempfile.mkdtemp()
                 xvfb_lock_file = os.path.join(tmp_dir, f".X{display_number}-lock")
                 if os.path.exists(xvfb_lock_file):
                     print(f"清理旧的 Xvfb 锁文件: {xvfb_lock_file}")
                     os.remove(xvfb_lock_file)
 
-                # 杀死所有残留的 Xvfb 进程
-                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  # 忽略错误
-                time.sleep(1)  # 等待进程终止
+                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  
+                time.sleep(1)  
 
-                # 启动 Xvfb
                 xvfb_process = subprocess.Popen(["Xvfb", f":{display_number}", "-screen", "0", "1024x768x24"])
-                time.sleep(2)  # 等待 Xvfb 启动
+                time.sleep(2)  
 
-                # 设置 Qt 插件环境变量
                 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-                
-                # 运行 mscore 命令
+
                 subprocess.run(
                     ['mscore', '-o', mp3_path, xml_path],
                     check=True,
                     capture_output=True,
                 )
-                
-                # 等待MP3文件生成完成
+
                 if self.wait_for_file(mp3_path):
                     print(f"Conversion to {mp3_path} completed")
                     return mp3_path
@@ -544,7 +520,7 @@ class NotaGenRun:
                 print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
             finally:
-                # 关闭 Xvfb
+
                 xvfb_process.terminate()
                 xvfb_process.wait()
         else:
@@ -557,7 +533,7 @@ class NotaGenRun:
                     check=True,
                     capture_output=True,
                 )
-                # 等待MP3文件生成完成
+
                 if self.wait_for_file(mp3_path):
                     print(f"Conversion to {mp3_path} completed")
                     return mp3_path
@@ -572,40 +548,35 @@ class NotaGenRun:
         import subprocess
         import sys
         import tempfile
-        
+
         base_png_path = xml_path.rsplit(".", 1)[0]
-        # 检测操作系统是否为 Linux
+
         if sys.platform == "linux":
             try:
-                # 使用不同的显示端口
+
                 display_number = 100
                 os.environ["DISPLAY"] = f":{display_number}"
 
-                # 检查并清理旧的 Xvfb 锁文件
                 tmp_dir = tempfile.mkdtemp()
                 xvfb_lock_file = os.path.join(tmp_dir, f".X{display_number}-lock")
                 if os.path.exists(xvfb_lock_file):
                     print(f"清理旧的 Xvfb 锁文件: {xvfb_lock_file}")
                     os.remove(xvfb_lock_file)
 
-                # 杀死所有残留的 Xvfb 进程
-                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  # 忽略错误
-                time.sleep(1)  # 等待进程终止
+                subprocess.run(["pkill", "Xvfb"], stderr=subprocess.DEVNULL)  
+                time.sleep(1)  
 
-                # 启动 Xvfb
                 xvfb_process = subprocess.Popen(["Xvfb", f":{display_number}", "-screen", "0", "1024x768x24"])
-                time.sleep(2)  # 等待 Xvfb 启动
+                time.sleep(2)  
 
-                # 设置 Qt 插件环境变量
                 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-                
-                # 运行 mscore 命令
+
                 subprocess.run(
                     ['mscore', '-o', f"{base_png_path}.png", xml_path],
                     check=True,
                     capture_output=True,
                 )
-                # 等待PNG序列生成完成
+
                 png_files = self.wait_for_png_sequence(base_png_path)
                 if png_files:
                     print(f"Converted to {len(png_files)} PNG files")
@@ -617,7 +588,7 @@ class NotaGenRun:
                 print(f"Conversion failed: {e.stderr}" if e.stderr else "Unknown error")
                 return None
             finally:
-                # 关闭 Xvfb
+
                 xvfb_process.terminate()
                 xvfb_process.wait()
         else:
@@ -630,7 +601,7 @@ class NotaGenRun:
                     check=True,
                     capture_output=True,
                 )
-                # 等待PNG序列生成完成
+
                 png_files = self.wait_for_png_sequence(base_png_path)
                 if png_files:
                     print(f"Converted to {len(png_files)} PNG files")
@@ -651,24 +622,22 @@ class NotaGenRun:
         try:
             fnm, ext = os.path.splitext(abc_path)
             abctext = readfile(abc_path)
-            
-            # 设置参数，对应原命令行参数
-            skip, num = 0, 1  # 对应 -m 参数
-            show_whole_rests = False  # 对应 -r 参数
-            line_breaks = False  # 对应 -b 参数
-            force_string_fret = False  # 对应 -f 参数
-            
+
+            skip, num = 0, 1  
+            show_whole_rests = False  
+            line_breaks = False  
+            force_string_fret = False  
+
             xml_docs = getXmlDocs(abctext, skip, num, show_whole_rests, line_breaks, force_string_fret)
-            
+
             for itune, xmldoc in enumerate(xml_docs):
                 fnmNum = '%02d' % (itune + 1) if len(xml_docs) > 1 else ''
-                writefile(output_dir, fnm, fnmNum, xmldoc, '', False)  # '' 对应 -mxl 参数，False 对应 -t 参数
+                writefile(output_dir, fnm, fnmNum, xmldoc, '', False)  
             print(f"Conversion to {xml_path}",)
             return xml_path
         except Exception as e:
             print(f"Conversion failed: {str(e)}")
             return None
-
 
 NODE_CLASS_MAPPINGS = {
     "NotaGenRun": NotaGenRun,
