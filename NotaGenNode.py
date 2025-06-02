@@ -39,6 +39,7 @@ class NotaGenRun:
     def __init__(self):
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.node_dir = node_dir
+        self.model_name = None
 
     @classmethod
     def INPUT_TYPES(s):
@@ -109,7 +110,9 @@ class NotaGenRun:
         model_file_path = os.path.join(nota_model_path, model)
 
         global MODEL_CACHE, PATCHILIZER
-        if MODEL_CACHE is None:
+        if MODEL_CACHE is None or self.model_name != model:
+            self.model_name = model
+
             MODEL_CACHE = torch.load(model_file_path, map_location=torch.device(self.device))
             nota_model.load_state_dict(MODEL_CACHE['model'])
             nota_model = nota_model.to(self.device)
@@ -123,7 +126,8 @@ class NotaGenRun:
             '%' + composer + '\n',
             '%' + instrumentation + '\n']
 
-        if PATCHILIZER is None:
+        if PATCHILIZER is None or self.model_name != model:
+            self.model_name = model
             PATCHILIZER  = Patchilizer(model)
 
         bos_patch = [PATCHILIZER.bos_token_id] * (patch_size - 1) + [PATCHILIZER.eos_token_id]
