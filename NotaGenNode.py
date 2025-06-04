@@ -230,7 +230,8 @@ class NotaGenRun:
                 generation_time_cost = time.time() - start_time
 
                 abc_text = ''.join(byte_list)
-                filename = time.strftime("%Y%m%d-%H%M%S") + \
+                prompt_text = "-".join([period, composer, instrumentation]).replace(" ", "").replace(",", "-")
+                filename = prompt_text + "_" + time.strftime("%Y%m%d-%H%M%S") + \
                         "_" + str(int(generation_time_cost)) + ".abc"
 
                 unreduced_output_path = os.path.join(INTERLEAVED_OUTPUT_FOLDER, filename)
