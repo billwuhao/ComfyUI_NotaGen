@@ -103,20 +103,18 @@ class NotaGenRun:
                                 num_attention_heads=hidden_size // 64,
                                 vocab_size=128)
 
-        nota_model = NotaGenLMHeadModel(encoder_config=patch_config, decoder_config=byte_config, model=model)
-
-        print("Parameter Number: " + str(sum(p.numel() for p in nota_model.parameters() if p.requires_grad)))
-
         model_file_path = os.path.join(nota_model_path, model)
 
         global MODEL_CACHE, PATCHILIZER
         if MODEL_CACHE is None or self.model_name != model:
             self.model_name = model
+            MODEL_CACHE = NotaGenLMHeadModel(encoder_config=patch_config, decoder_config=byte_config, model=model)
+            print("Parameter Number: " + str(sum(p.numel() for p in MODEL_CACHE.parameters() if p.requires_grad)))
 
-            MODEL_CACHE = torch.load(model_file_path, map_location=torch.device(self.device))
-            nota_model.load_state_dict(MODEL_CACHE['model'])
-            nota_model = nota_model.to(self.device)
-            nota_model.eval()
+            NOTA_MODEL = torch.load(model_file_path, map_location="cpu")
+            MODEL_CACHE.load_state_dict(NOTA_MODEL['model'])
+            MODEL_CACHE = MODEL_CACHE.to(self.device)
+            MODEL_CACHE.eval()
 
         if custom_prompt.strip():
             period, composer, instrumentation = [i.strip() for i in custom_prompt.split('|')]
@@ -128,7 +126,7 @@ class NotaGenRun:
 
         if PATCHILIZER is None or self.model_name != model:
             self.model_name = model
-            PATCHILIZER  = Patchilizer(model)
+            PATCHILIZER = Patchilizer(model)
 
         bos_patch = [PATCHILIZER.bos_token_id] * (patch_size - 1) + [PATCHILIZER.eos_token_id]
         num_gen = 0
@@ -154,7 +152,7 @@ class NotaGenRun:
 
             tunebody_flag = False
             while True:
-                predicted_patch = nota_model.generate(input_patches.unsqueeze(0),
+                predicted_patch = MODEL_CACHE.generate(input_patches.unsqueeze(0),
                                                 top_k=top_k,
                                                 top_p=top_p,
                                                 temperature=temperature)
@@ -162,7 +160,7 @@ class NotaGenRun:
                     tunebody_flag = True
                     r0_patch = torch.tensor([ord(c) for c in '[r:0/']).unsqueeze(0).to(self.device)
                     temp_input_patches = torch.concat([input_patches, r0_patch], axis=-1)
-                    predicted_patch = nota_model.generate(temp_input_patches.unsqueeze(0),
+                    predicted_patch = MODEL_CACHE.generate(temp_input_patches.unsqueeze(0),
                                                     top_k=top_k,
                                                     top_p=top_p,
                                                     temperature=temperature)
@@ -320,7 +318,6 @@ class NotaGenRun:
             if unload_model:
                 import gc
                 PATCHILIZER = None
-                nota_model = None
                 MODEL_CACHE = None
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -335,7 +332,6 @@ class NotaGenRun:
             if unload_model:
                 import gc
                 PATCHILIZER = None
-                nota_model = None
                 MODEL_CACHE = None
                 gc.collect()
                 torch.cuda.empty_cache()
